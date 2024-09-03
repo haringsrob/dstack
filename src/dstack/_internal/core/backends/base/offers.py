@@ -3,6 +3,10 @@ from typing import Callable, List, Optional
 
 import gpuhunt
 
+from dstack._internal.utils.logging import get_logger
+
+logger = get_logger(__name__)
+
 from dstack._internal.core.models.backends.base import BackendType
 from dstack._internal.core.models.instances import (
     Disk,
@@ -127,6 +131,8 @@ def requirements_to_query_filter(req: Optional[Requirements]) -> gpuhunt.QueryFi
     if res.disk:
         q.min_disk_size = res.disk.size.min
         q.max_disk_size = res.disk.size.max
+
+    logger.info("Res gpu: %s", res.gpu)
 
     if res.gpu:
         q.gpu_vendor = res.gpu.vendor

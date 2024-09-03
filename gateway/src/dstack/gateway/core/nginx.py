@@ -77,6 +77,7 @@ class Nginx(BaseModel):
     async def register_service(
         self, project: str, service_id: str, domain: str, https: bool, auth: bool
     ):
+        https = False
         config_name = self.get_config_name(domain)
         conf = ServiceConfig(
             project=project,
@@ -100,6 +101,7 @@ class Nginx(BaseModel):
         logger.info("Service domain %s is registered now", domain)
 
     async def register_entrypoint(self, domain: str, prefix: str, https: bool):
+        https = False
         config_name = self.get_config_name(domain)
         conf = EntrypointConfig(
             domain=domain,
@@ -209,7 +211,7 @@ class Nginx(BaseModel):
 
         r = subprocess.run(cmd, capture_output=True)
         if r.returncode != 0:
-            raise GatewayError(f"Certbot failed:\n{r.stderr.decode()}")
+            raise GatewayError(f"Certbot failed IAMHERE:\n{r.stderr.decode()}")
 
     @staticmethod
     def get_config_name(domain: str) -> str:

@@ -70,7 +70,7 @@ class KubernetesCompute(Compute):
                     resources=Resources(
                         cpus=node.status.capacity["cpu"],
                         memory_mib=int(parse_memory(node.status.capacity["memory"], as_untis="M")),
-                        gpus=_get_gpus_from_node_labels(node.metadata.labels),
+                        gpus=_get_gpus_from_node_labels(node.metadata.labels, node),
                         spot=False,
                         disk=Disk(
                             size_mib=int(
@@ -160,7 +160,11 @@ class KubernetesCompute(Compute):
                             # TODO: Pass cpu, memory, gpu as requests.
                             # Beware that node capacity != allocatable, so
                             # if the node has 2xCPU – then cpu=2 request will probably fail.
-                            resources=client.V1ResourceRequirements(requests={}),
+                            #resources=client.V1ResourceRequirements(requests={}),
+                            resources=client.V1ResourceRequirements(
+                                requests={"amd.com/gpu": 1},
+                                limits={"amd.com/gpu": 1},
+                            ),
                         )
                     ]
                 ),
@@ -319,7 +323,40 @@ class KubernetesCompute(Compute):
         )
 
 
-def _get_gpus_from_node_labels(labels: Dict) -> List[Gpu]:
+def _get_gpus_from_node_labels(labels: Dict, node: client.V1Node) -> List[Gpu]:
+    logger.info("node: %s", node.status.allocatable["amd.com/gpu"])
+    logger.info("labels: %s", labels)
+
+    # gpu count casted to int
+    gpu_count = int(node.status.allocatable["amd.com/gpu"])
+    # Figure out via labels/node tagger.
+    gpu_product = "MI300X"
+
+    logger.info("Accelerators: %s", AcceleratorVendor.AMD)
+    logger.info("Accelerators: %s", AcceleratorVendor.NVIDIA)
+
+    response = [
+        Gpu(
+            vendor=AcceleratorVendor.AMD,
+            name=gpu_product,
+            memory_mib=192 * 1024
+        )
+        for _ in range(gpu_count)
+    ]
+
+    logger.info("gpu count: %s", response)
+
+    return response
+
+    return [
+        Gpu(
+            vendor=AcceleratorVendor.AMD,
+            name=gpu_product,
+            memory_mib=64 * 1024
+        )
+        for _ in range(gpu_count)
+    ]
+
     # We rely on https://github.com/NVIDIA/gpu-feature-discovery to detect gpus.
     # Note that "nvidia.com/gpu.product" is not a short gpu name like "T4" or "A100" but a product name
     # from nvidia-smi like "Tesla-T4" or "A100-SXM4-40GB".
@@ -505,7 +542,10 @@ def _wait_for_load_balancer_hostname(
                 raise
         else:
             if service.status.load_balancer.ingress is not None:
-                return service.status.load_balancer.ingress[0].hostname
+                if service.status.load_balancer.ingress[0].hostname is not None:
+                    return service.status.load_balancer.ingress[0].hostname
+                logger.info("Could not find hostname for load balancer: %s, defaulting to ip: %s", service_name, service.status.load_balancer.ingress[0].ip)
+                return service.status.load_balancer.ingress[0].ip
         elapsed_time = time.time() - start_time
         if elapsed_time >= timeout_seconds:
             logger.warning("Timeout waiting for load balancer %s to get ip", service_name)
